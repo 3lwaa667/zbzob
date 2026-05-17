@@ -66,16 +66,20 @@ fun ScoreScreen(
         showDialog = showPlayerSetup,
         onDismissRequest = { showPlayerSetup = false }
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize().background(Color.Black).padding(top = 16.dp, bottom = 16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+        Box(
+            modifier = Modifier.fillMaxSize().background(Color.Black),
+            contentAlignment = Alignment.Center
         ) {
-            Text(text = "SELECT PLAYERS", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = MaterialTheme.colors.primary)
-            Spacer(modifier = Modifier.height(4.dp))
-            ScalingLazyColumn(
-                modifier = Modifier.fillMaxWidth().weight(1f),
+            Column(
+                modifier = Modifier.fillMaxSize(0.85f),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                Text(text = "SETUP PLAYERS", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = MaterialTheme.colors.primary, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                Spacer(modifier = Modifier.height(6.dp))
+                ScalingLazyColumn(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
                 items(state.availablePlayers) { player ->
                     val inTeam1 = state.team1Players.contains(player)
                     val inTeam2 = state.team2Players.contains(player)
@@ -120,15 +124,21 @@ fun ScoreScreen(
                 }
             }
         }
+        }
     }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
-            .padding(horizontal = 12.dp, vertical = 16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .background(Color.Black),
+        contentAlignment = Alignment.Center
     ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize(0.85f),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceEvenly
+        ) {
         // Team 1 Section
         ScoreRow(
             teamName = "TEAM 1",
@@ -204,11 +214,12 @@ fun ScoreScreen(
         // Minor Reset Button at bottom right if needed, or long press
         Button(
             onClick = { viewModel.resetMatch() },
-            modifier = Modifier.size(24.dp).padding(2.dp),
+            modifier = Modifier.size(26.dp),
             colors = ButtonDefaults.buttonColors(backgroundColor = Color.DarkGray)
         ) {
-            Icon(Icons.Default.Refresh, contentDescription = "Reset", modifier = Modifier.size(12.dp))
+            Icon(Icons.Default.Refresh, contentDescription = "Reset", modifier = Modifier.size(14.dp))
         }
+    }
     }
 }
 
@@ -233,7 +244,7 @@ fun ScoreRow(
     ) {
         // Left Column: Name & Games (with clickable event)
         Column(
-            horizontalAlignment = Alignment.Start,
+            horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.weight(1f)
         ) {
             Row(
@@ -244,11 +255,12 @@ fun ScoreRow(
                     text = teamName,
                     style = MaterialTheme.typography.caption2,
                     color = MaterialTheme.colors.primary,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
                 if (isServing) {
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Box(modifier = Modifier.size(6.dp).background(MaterialTheme.colors.primary, CircleShape))
+                    Spacer(modifier = Modifier.width(2.dp))
+                    Box(modifier = Modifier.size(4.dp).background(MaterialTheme.colors.primary, CircleShape))
                 }
             }
             if (players.isNotEmpty()) {
@@ -256,20 +268,22 @@ fun ScoreRow(
                     text = players.joinToString(",\n"),
                     style = MaterialTheme.typography.title3.copy(fontSize = 9.sp),
                     color = Color.LightGray,
-                    lineHeight = 10.sp
+                    lineHeight = 10.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
             }
             Text(
                 text = "G: $games",
-                style = MaterialTheme.typography.body2,
-                color = Color.White.copy(alpha = 0.7f)
+                style = MaterialTheme.typography.body2.copy(fontSize = 11.sp),
+                color = Color.White.copy(alpha = 0.7f),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
         }
 
         // Center: Points
         Text(
             text = points,
-            fontSize = 42.sp,
+            fontSize = 34.sp,
             fontWeight = FontWeight.Black,
             color = Color.White,
             modifier = Modifier.weight(1f),
@@ -279,23 +293,23 @@ fun ScoreRow(
         // Right: Buttons
         Column(
             verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.End,
+            horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.weight(1f)
         ) {
             Button(
                 onClick = onIncrement,
-                modifier = Modifier.size(32.dp),
+                modifier = Modifier.size(28.dp),
                 colors = ButtonDefaults.primaryButtonColors()
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Add", modifier = Modifier.size(18.dp))
+                Icon(Icons.Default.Add, contentDescription = "Add", modifier = Modifier.size(16.dp))
             }
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             Button(
                 onClick = onDecrement,
-                modifier = Modifier.size(32.dp),
+                modifier = Modifier.size(28.dp),
                 colors = ButtonDefaults.buttonColors(backgroundColor = Color.DarkGray)
             ) {
-                Icon(Icons.Default.Remove, contentDescription = "Remove", modifier = Modifier.size(18.dp))
+                Icon(Icons.Default.Remove, contentDescription = "Remove", modifier = Modifier.size(16.dp))
             }
         }
     }
