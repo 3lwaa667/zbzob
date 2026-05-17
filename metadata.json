@@ -1,0 +1,6 @@
+{
+  "name": "Padel Wear Score",
+  "description": "Minimal, high-contrast Padel scoreboard app for Wear OS smartwatches.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
