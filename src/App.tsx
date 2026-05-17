@@ -4,20 +4,101 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Minus, RotateCcw, Smartphone, Watch, Download } from 'lucide-react';
+import { Plus, Minus, RotateCcw, Smartphone, Watch, Download, RefreshCcw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 // Progression: 0 -> 15 -> 30 -> 40 -> GAME
 const PROGRESSION = ["0", "15", "30", "40", "GAME"];
 
 export default function App() {
-  const [team1Points, setTeam1Points] = useState(0);
+  const [team1Points, setTeam1Points] = useState("0");
   const [team1Games, setTeam1Games] = useState(0);
-  const [team2Points, setTeam2Points] = useState(0);
+  const [team2Points, setTeam2Points] = useState("0");
   const [team2Games, setTeam2Games] = useState(0);
   const [servingTeam, setServingTeam] = useState(1);
+  const [team1Players, setTeam1Players] = useState<string[]>([]);
+  const [team2Players, setTeam2Players] = useState<string[]>([]);
+  const [availablePlayers, setAvailablePlayers] = useState(["hazem", "aly", "ezz", "el mo", "joe", "seif"]);
+  const [newPlayer, setNewPlayer] = useState("");
+  const [isSetupOpen, setIsSetupOpen] = useState(false);
   const [lastActionTime, setLastActionTime] = useState(0);
   const [isVibrating, setIsVibrating] = useState(false);
+  const [history, setHistory] = useState<any[]>([]);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [isTimerRunning, setIsTimerRunning] = useState(false);
+  const [hasMatchStarted, setHasMatchStarted] = useState(false);
+
+  useEffect(() => {
+    let interval: any;
+    if (isTimerRunning) {
+      interval = setInterval(() => {
+        setElapsedSeconds(prev => prev + 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [isTimerRunning]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        setIsTimerRunning(false);
+      } else {
+        if (hasMatchStarted) {
+          setIsTimerRunning(true);
+        }
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [hasMatchStarted]);
+
+  const formatTime = (totalSeconds: number) => {
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  const startTimerIfNeeded = () => {
+    if (!hasMatchStarted) {
+      setHasMatchStarted(true);
+    }
+    setIsTimerRunning(true);
+  };
+
+  const randomizePlayers = () => {
+    const pool = [...availablePlayers].sort(() => 0.5 - Math.random());
+    setTeam1Players(pool.slice(0, 2));
+    setTeam2Players(pool.slice(2, 4));
+  };
+
+  const togglePlayerTeam = (player: string) => {
+    if (team1Players.includes(player)) {
+      setTeam1Players(prev => prev.filter(p => p !== player));
+      setTeam2Players(prev => [...prev, player]);
+    } else if (team2Players.includes(player)) {
+      setTeam2Players(prev => prev.filter(p => p !== player));
+    } else {
+      if (team1Players.length < 2) {
+        setTeam1Players(prev => [...prev, player]);
+      } else if (team2Players.length < 2) {
+        setTeam2Players(prev => [...prev, player]);
+      }
+    }
+  };
+
+  const addAvailablePlayer = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPlayer.trim() && !availablePlayers.includes(newPlayer.toLowerCase())) {
+      setAvailablePlayers(prev => [...prev, newPlayer.toLowerCase()]);
+      setNewPlayer('');
+    }
+  };
+
+  const removeAvailablePlayer = (player: string) => {
+    setAvailablePlayers(prev => prev.filter(p => p !== player));
+    setTeam1Players(prev => prev.filter(p => p !== player));
+    setTeam2Players(prev => prev.filter(p => p !== player));
+  };
 
   const debounceCheck = useCallback(() => {
     const now = Date.now();
@@ -34,55 +115,108 @@ export default function App() {
     setTimeout(() => setIsVibrating(false), 100);
   };
 
+  const pushHistory = () => {
+    setHistory(prev => [...prev, {
+      team1Points, team2Points, team1Games, team2Games, servingTeam
+    }]);
+  };
+
+  const popHistory = () => {
+    setHistory(prev => {
+      if (prev.length === 0) return prev;
+      const last = prev[prev.length - 1];
+      setTeam1Points(last.team1Points);
+      setTeam2Points(last.team2Points);
+      setTeam1Games(last.team1Games);
+      setTeam2Games(last.team2Games);
+      setServingTeam(last.servingTeam);
+      return prev.slice(0, -1);
+    });
+  };
+
+  const handleGameWin = (team: number) => {
+    setTeam1Games(g => team === 1 ? g + 1 : g);
+    setTeam2Games(g => team === 2 ? g + 1 : g);
+    setTeam1Points("0");
+    setTeam2Points("0");
+    setServingTeam(s => s === 1 ? 2 : 1);
+  };
+
   const incrementTeam1 = () => {
     if (debounceCheck()) return;
     triggerVibration();
-    if (team1Points < PROGRESSION.length - 1) {
-      const next = team1Points + 1;
-      if (PROGRESSION[next] === "GAME") {
-        setTeam1Games(prev => prev + 1);
-        setTeam1Points(0);
-        setTeam2Points(0);
-        setServingTeam(prev => prev === 1 ? 2 : 1);
-      } else {
-        setTeam1Points(next);
-      }
+    pushHistory();
+    startTimerIfNeeded();
+    
+    let t1 = team1Points;
+    let t2 = team2Points;
+    let won = false;
+
+    if (t1 === "0") t1 = "15";
+    else if (t1 === "15") t1 = "30";
+    else if (t1 === "30") t1 = "40";
+    else if (t1 === "40") {
+        if (t2 === "40") t1 = "AD";
+        else if (t2 === "AD") { t1 = "GP"; t2 = "GP"; }
+        else won = true;
+    }
+    else if (t1 === "AD" || t1 === "GP") won = true;
+
+    if (won) handleGameWin(1);
+    else {
+        setTeam1Points(t1);
+        setTeam2Points(t2);
     }
   };
 
   const decrementTeam1 = () => {
     if (debounceCheck()) return;
     triggerVibration();
-    if (team1Points > 0) setTeam1Points(prev => prev - 1);
+    popHistory();
   };
 
   const incrementTeam2 = () => {
     if (debounceCheck()) return;
     triggerVibration();
-    if (team2Points < PROGRESSION.length - 1) {
-      const next = team2Points + 1;
-      if (PROGRESSION[next] === "GAME") {
-        setTeam2Games(prev => prev + 1);
-        setTeam1Points(0);
-        setTeam2Points(0);
-        setServingTeam(prev => prev === 1 ? 2 : 1);
-      } else {
-        setTeam2Points(next);
-      }
+    pushHistory();
+    startTimerIfNeeded();
+    
+    let t1 = team1Points;
+    let t2 = team2Points;
+    let won = false;
+
+    if (t2 === "0") t2 = "15";
+    else if (t2 === "15") t2 = "30";
+    else if (t2 === "30") t2 = "40";
+    else if (t2 === "40") {
+        if (t1 === "40") t2 = "AD";
+        else if (t1 === "AD") { t1 = "GP"; t2 = "GP"; }
+        else won = true;
+    }
+    else if (t2 === "AD" || t2 === "GP") won = true;
+
+    if (won) handleGameWin(2);
+    else {
+        setTeam1Points(t1);
+        setTeam2Points(t2);
     }
   };
 
   const decrementTeam2 = () => {
     if (debounceCheck()) return;
     triggerVibration();
-    if (team2Points > 0) setTeam2Points(prev => prev - 1);
+    popHistory();
   };
 
   const resetMatch = () => {
-    setTeam1Points(0);
+    setHistory([]);
+    setTeam1Points("0");
     setTeam1Games(0);
-    setTeam2Points(0);
+    setTeam2Points("0");
     setTeam2Games(0);
+    setElapsedSeconds(0);
+    setIsTimerRunning(false);
+    setHasMatchStarted(false);
     triggerVibration();
   };
 
@@ -103,30 +237,40 @@ export default function App() {
       {/* Main Area */}
       <div className="flex-1 grid grid-cols-12 auto-rows-min gap-4">
         
-        {/* Left Panel: Logic (Bento Card) */}
-        <div className="col-span-12 md:col-span-3 row-span-2 md:row-span-4 bg-neutral-900 border border-neutral-800 rounded-3xl p-6 flex flex-col justify-between overflow-hidden">
-          <div>
-            <h3 className="text-lime-400 text-xs font-black uppercase mb-6 tracking-wider italic">Score Logic</h3>
-            <div className="space-y-6">
-              <div className="flex items-center gap-4">
-                <span className="text-3xl font-light font-mono opacity-20 italic">01</span>
-                <span className="text-lg font-medium tracking-tight leading-tight">Point Progression<br/><span className="text-neutral-500 text-sm">0-15-30-40-GAME</span></span>
-              </div>
-              <div className="flex items-center gap-4">
-                <span className="text-3xl font-light font-mono opacity-20 italic">02</span>
-                <span className="text-lg font-medium tracking-tight leading-tight">Haptic Engine<br/><span className="text-neutral-500 text-sm">Confirmed vibrations</span></span>
-              </div>
-              <div className="flex items-center gap-4">
-                <span className="text-3xl font-light font-mono opacity-20 italic">03</span>
-                <span className="text-lg font-medium tracking-tight leading-tight">Debounce Filter<br/><span className="text-neutral-500 text-sm">Anti-accidental taps</span></span>
+        {/* Left Panel: Companion Config (Bento Card) */}
+        <div className="col-span-12 md:col-span-3 row-span-2 md:row-span-4 bg-neutral-900 border border-neutral-800 rounded-3xl p-6 flex flex-col overflow-hidden">
+            <h3 className="text-lime-400 text-xs font-black uppercase mb-4 tracking-wider italic">Companion Config</h3>
+            <div className="flex-1 overflow-y-auto hidden-scrollbar mb-4">
+              <div className="space-y-2">
+                {availablePlayers.map(p => {
+                  const inT1 = team1Players.includes(p);
+                  const inT2 = team2Players.includes(p);
+                  return (
+                    <div key={p} className={`flex items-center justify-between p-2 rounded-xl text-sm transition-colors border max-w-full ${inT1 ? 'bg-lime-400/10 border-lime-400/30 text-lime-400' : inT2 ? 'bg-blue-500/10 border-blue-500/30 text-blue-400' : 'bg-black/40 border-neutral-800 text-neutral-400'}`}>
+                      <div className="flex items-center gap-2 overflow-hidden cursor-pointer flex-1" onClick={() => togglePlayerTeam(p)}>
+                        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${inT1 ? 'bg-lime-400' : inT2 ? 'bg-blue-500' : 'bg-neutral-700'}`} />
+                        <span className="truncate">{p}</span>
+                      </div>
+                      <button onClick={() => removeAvailablePlayer(p)} className="p-1 hover:text-white flex-shrink-0">
+                        <Minus className="w-3 h-3" />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             </div>
-          </div>
-          <div className="border-t border-neutral-800 pt-6 mt-6">
-            <p className="text-[10px] text-neutral-500 uppercase leading-relaxed font-mono">
-              Built with Jetpack Compose for Wear OS.<br/>Zero Network Latency Policy.
-            </p>
-          </div>
+            <form onSubmit={addAvailablePlayer} className="flex gap-2">
+              <input 
+                type="text" 
+                value={newPlayer}
+                onChange={e => setNewPlayer(e.target.value)}
+                placeholder="New player..." 
+                className="flex-1 bg-black/40 border border-neutral-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-lime-400 text-white placeholder-neutral-600"
+              />
+              <button disabled={!newPlayer.trim()} type="submit" className="bg-neutral-800 text-white rounded-xl px-3 py-2 disabled:opacity-50 hover:bg-neutral-700 transition-colors">
+                <Plus className="w-4 h-4" />
+              </button>
+            </form>
         </div>
 
         {/* Center: The Watch Simulator (Featured Bento Card) */}
@@ -142,20 +286,48 @@ export default function App() {
                 className={`w-full h-full bg-black rounded-full flex flex-col items-stretch overflow-hidden relative transition-transform duration-75 ${isVibrating ? 'scale-[0.98]' : 'scale-100'}`}
                 style={{ clipPath: 'circle(50% at 50% 50%)' }}
               >
+                {isSetupOpen ? (
+                  <div className="absolute inset-0 z-50 bg-neutral-900 flex flex-col p-4">
+                    <div className="text-center font-bold text-[10px] text-lime-400 mt-6 tracking-widest">SELECT PLAYERS</div>
+                    <div className="flex-1 overflow-y-auto w-full px-6 mt-4 mb-10 hidden-scrollbar space-y-2">
+                       {availablePlayers.map(p => {
+                         const inT1 = team1Players.includes(p);
+                         const inT2 = team2Players.includes(p);
+                         return (
+                           <div key={p} onClick={() => togglePlayerTeam(p)} className={`text-center py-2 rounded-full text-xs font-bold transition-colors cursor-pointer border ${inT1 ? 'bg-lime-400/20 border-lime-400/50 text-lime-400' : inT2 ? 'bg-blue-500/20 border-blue-500/50 text-blue-400' : 'bg-neutral-800 border-neutral-700 text-neutral-400'}`}>
+                             {p} {inT1 ? '(T1)' : inT2 ? '(T2)' : ''}
+                           </div>
+                         );
+                       })}
+                    </div>
+                    <div className="absolute bottom-6 left-0 right-0 flex justify-center gap-2">
+                      <button onClick={randomizePlayers} className="bg-neutral-800 text-white px-4 py-1.5 rounded-full text-[10px] font-black tracking-widest flex items-center gap-1">
+                        <RefreshCcw className="w-3 h-3" /> SHUFFLE
+                      </button>
+                      <button onClick={() => setIsSetupOpen(false)} className="bg-lime-400 text-black px-4 py-1.5 rounded-full text-[10px] font-black tracking-widest shadow-[0_0_15px_rgba(163,230,53,0.3)]">DONE</button>
+                    </div>
+                  </div>
+                ) : null}
+
                 {/* Time / Status Bar */}
                 <div className="absolute top-10 left-0 right-0 text-center text-[10px] font-bold text-lime-400/60 uppercase tracking-[0.2em] z-10">
-                  12:45 • SET 1
+                  {/* Keep blank or use for generic status */}
                 </div>
 
                 {/* Team 1 Section */}
-                <div className={`flex-1 flex flex-col justify-center px-10 border-b border-neutral-800/50 pt-8 transition-colors ${servingTeam === 1 ? 'bg-gradient-to-b from-lime-400/10 to-transparent' : 'bg-transparent'}`}>
-                  <div className="flex justify-between items-center">
-                    <div>
+                <div className={`flex-1 flex flex-col justify-center px-10 pt-8 transition-colors ${servingTeam === 1 ? 'bg-gradient-to-b from-lime-400/10 to-transparent' : 'bg-transparent'}`}>
+                  <div className="flex justify-between items-center h-full">
+                    <div className="flex-1 flex flex-col justify-center cursor-pointer" onClick={() => { if (!hasMatchStarted) setIsSetupOpen(true); else randomizePlayers(); }}>
                       <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-bold text-lime-400 tracking-widest">TEAM 1</span>
+                        <span className="text-[10px] font-bold text-lime-400 tracking-widest leading-none">TEAM 1</span>
                         {servingTeam === 1 && <div className="w-1.5 h-1.5 rounded-full bg-lime-400 animate-pulse" />}
                       </div>
-                      <div className="text-[12px] text-neutral-500 font-mono">G: {team1Games}</div>
+                      {team1Players.length > 0 && (
+                        <div className="text-[8px] text-neutral-400 uppercase leading-[10px] mt-1 pr-2 uppercase">
+                          {team1Players.join(',\n')}
+                        </div>
+                      )}
+                      <div className="text-[12px] text-neutral-500 font-mono mt-1 leading-none">G: {team1Games}</div>
                     </div>
                     <AnimatePresence mode="wait">
                       <motion.div 
@@ -163,31 +335,49 @@ export default function App() {
                         initial={{ opacity: 0, scale: 0.8 }}
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 1.2 }}
-                        className="text-6xl font-black italic text-white"
+                        className="flex-1 text-center text-6xl font-black italic text-white leading-none"
                       >
-                        {PROGRESSION[team1Points]}
+                        {team1Points}
                       </motion.div>
                     </AnimatePresence>
-                    <div className="flex flex-col gap-2">
-                      <button onClick={incrementTeam1} className="w-10 h-10 bg-lime-400 rounded-full flex items-center justify-center text-black active:scale-90 transition-transform shadow-[0_0_15px_rgba(163,230,53,0.3)]">
-                        <Plus className="w-6 h-6" />
+                    <div className="flex-1 flex flex-col gap-3 items-end">
+                      <button onClick={incrementTeam1} className="w-9 h-9 bg-lime-400 rounded-full flex items-center justify-center text-black active:scale-90 transition-transform shadow-[0_0_15px_rgba(163,230,53,0.3)]">
+                        <Plus className="w-5 h-5" />
                       </button>
-                      <button onClick={decrementTeam1} className="w-10 h-10 bg-neutral-800 rounded-full flex items-center justify-center text-white active:scale-90 transition-transform">
-                        <Minus className="w-4 h-4" />
+                      <button onClick={decrementTeam1} className="w-9 h-9 bg-neutral-800 rounded-full flex items-center justify-center text-white active:scale-90 transition-transform">
+                        <Minus className="w-5 h-5" />
                       </button>
                     </div>
                   </div>
                 </div>
 
+                {/* Timer Divider */}
+                <div className="relative z-10 flex items-center justify-center -my-3">
+                  <div className="h-px w-24 bg-neutral-800/80"></div>
+                  {hasMatchStarted ? (
+                    <div className="px-3 py-0.5 rounded-full bg-neutral-800 border border-neutral-700 text-[10px] font-mono font-bold text-lime-400 mx-2 shadow-[0_0_10px_rgba(163,230,53,0.1)]">
+                      {formatTime(elapsedSeconds)}
+                    </div>
+                  ) : (
+                    <div className="h-px w-8 bg-neutral-800/80 mx-2"></div>
+                  )}
+                  <div className="h-px w-24 bg-neutral-800/80"></div>
+                </div>
+
                 {/* Team 2 Section */}
                 <div className={`flex-1 flex flex-col justify-center px-10 pt-4 bg-gradient-to-t transition-colors ${servingTeam === 2 ? 'from-lime-400/10 to-transparent' : 'from-neutral-900/50 to-transparent'}`}>
-                  <div className="flex justify-between items-center">
-                    <div>
+                  <div className="flex justify-between items-center h-full">
+                    <div className="flex-1 flex flex-col justify-center cursor-pointer" onClick={() => { if (!hasMatchStarted) setIsSetupOpen(true); else randomizePlayers(); }}>
                       <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-bold text-lime-400 tracking-widest">TEAM 2</span>
+                        <span className="text-[10px] font-bold text-lime-400 tracking-widest leading-none">TEAM 2</span>
                         {servingTeam === 2 && <div className="w-1.5 h-1.5 rounded-full bg-lime-400 animate-pulse" />}
                       </div>
-                      <div className="text-[12px] text-neutral-500 font-mono">G: {team2Games}</div>
+                      {team2Players.length > 0 && (
+                        <div className="text-[8px] text-neutral-400 uppercase leading-[10px] mt-1 pr-2 uppercase">
+                          {team2Players.join(',\n')}
+                        </div>
+                      )}
+                      <div className="text-[12px] text-neutral-500 font-mono mt-1 leading-none">G: {team2Games}</div>
                     </div>
                     <AnimatePresence mode="wait">
                       <motion.div 
@@ -195,17 +385,17 @@ export default function App() {
                         initial={{ opacity: 0, scale: 0.8 }}
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 1.2 }}
-                        className="text-6xl font-black italic text-neutral-400"
+                        className="flex-1 text-center text-6xl font-black italic text-neutral-400 leading-none"
                       >
-                        {PROGRESSION[team2Points]}
+                        {team2Points}
                       </motion.div>
                     </AnimatePresence>
-                    <div className="flex flex-col gap-2">
-                      <button onClick={incrementTeam2} className="w-10 h-10 bg-lime-400 rounded-full flex items-center justify-center text-black active:scale-90 transition-transform shadow-[0_0_15px_rgba(163,230,53,0.3)]">
-                        <Plus className="w-6 h-6" />
+                    <div className="flex-1 flex flex-col gap-3 items-end">
+                      <button onClick={incrementTeam2} className="w-9 h-9 bg-lime-400 rounded-full flex items-center justify-center text-black active:scale-90 transition-transform shadow-[0_0_15px_rgba(163,230,53,0.3)]">
+                        <Plus className="w-5 h-5" />
                       </button>
-                      <button onClick={decrementTeam2} className="w-10 h-10 bg-neutral-800 rounded-full flex items-center justify-center text-white active:scale-90 transition-transform">
-                        <Minus className="w-4 h-4" />
+                      <button onClick={decrementTeam2} className="w-9 h-9 bg-neutral-800 rounded-full flex items-center justify-center text-white active:scale-90 transition-transform">
+                        <Minus className="w-5 h-5" />
                       </button>
                     </div>
                   </div>
